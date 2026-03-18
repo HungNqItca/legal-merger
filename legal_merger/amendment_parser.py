@@ -12,16 +12,17 @@ from typing import Optional
 
 from .models import Amendment, OperationType
 from .document_parser import _norm_article_id
+from .patterns import _ROMAN_PAT
 
 
 class AmendmentParser:
 
     # Regex nhận dạng "điểm b(i), (ii) khoản N Điều M" — tiết trong điểm
     _RE_POINT_WITH_ITEMS = re.compile(
-        r'điểm\s+([a-zđ])\s*'
-        r'\((?P<first>(?:i{1,3}|iv|vi{0,3}|ix|x))\)'
-        r'(?P<rest>(?:\s*,\s*\((?:i{1,3}|iv|vi{0,3}|ix|x)\))*)'
-        r'\s+khoản\s+(\d+(?:\.\d+)?)\s+(?:Điều|ĐIỀU)\s+(\d+[a-zđ]?)',
+        rf'điểm\s+([a-zđ])\s*'
+        rf'\((?P<first>{_ROMAN_PAT})\)'
+        rf'(?P<rest>(?:\s*,\s*\({_ROMAN_PAT}\))*)'
+        rf'\s+khoản\s+(\d+(?:\.\d+)?)\s+(?:Điều|ĐIỀU)\s+(\d+[a-zđ]?)',
         re.IGNORECASE,
     )
 
@@ -33,8 +34,8 @@ class AmendmentParser:
             re.IGNORECASE),
         # điểm b(i), (ii) khoản N Điều M  — tiết trong điểm
         re.compile(
-            r'điểm\s+[a-zđ]\s*\((?:i{1,3}|iv|vi{0,3}|ix|x)\)'
-            r'(?:\s*,\s*\((?:i{1,3}|iv|vi{0,3}|ix|x)\))*'
+            rf'điểm\s+[a-zđ]\s*\({_ROMAN_PAT}\)'
+            rf'(?:\s*,\s*\({_ROMAN_PAT}\))*'
             r'\s+khoản\s+\d+(?:\.\d+)?\s+(?:Điều|ĐIỀU)\s+\d+[a-zđ]?',
             re.IGNORECASE),
         # điểm ... khoản ... Điều ...  (dấu ) là tuỳ chọn)
@@ -99,7 +100,7 @@ class AmendmentParser:
         masked_text, content_map = self._mask_replacement_content(text)
 
         art_blocks = re.split(
-            r'\n(?=(?:Điều|ĐIỀU)\s+\d+[a-zđ]?\.\s)',
+            r'\n(?=(?:Điều|ĐIỀU)\s+\d+[a-zđ]?[\.:][ \t])',
             masked_text, flags=re.IGNORECASE
         )
 
@@ -108,7 +109,7 @@ class AmendmentParser:
             block = block.strip()
             if not block:
                 continue
-            hdr = re.match(r'^((?:Điều|ĐIỀU)\s+\d+[a-zđ]?)\.\s', block, re.IGNORECASE)
+            hdr = re.match(r'^((?:Điều|ĐIỀU)\s+\d+[a-zđ]?)[\.:][ \t]*', block, re.IGNORECASE)
             if not hdr:
                 continue
 
@@ -143,10 +144,9 @@ class AmendmentParser:
                 if not para:
                     continue
                 restored = self._restore_content(para, content_map)
-                amend = self._parse_paragraph(
-                    restored, source_name, effective_date)
-                if amend:
-                    amendments.append(amend)
+                amendments.extend(
+                    self._parse_paragraph(restored, source_name, effective_date)
+                )
 
         # Lọc bỏ amendment nhầm target chính VB sửa đổi
         amendments = [
@@ -190,7 +190,12 @@ class AmendmentParser:
 
         def replace_quoted(m):
             content = m.group(1).strip()
-            if len(content) < 20:
+            # Chỉ mask khi nội dung dài HOẶC chứa ký tự cấu trúc nhúng (khoản/điều/điểm)
+            # Chuỗi ngắn inline (dùng trong REPLACE) giữ nguyên để _OP_REPLACE nhận dạng được
+            has_structure = bool(re.search(
+                r'\n\s*\d+\.\s|\n\s*[a-zđ]\)\s|\n\s*(?:Điều|ĐIỀU)\s+\d+',
+                content))
+            if not has_structure and len(content) < 20:
                 return m.group(0)
             token = f"__CONTENT_{counter[0]}__"
             content_map[token] = content
@@ -244,20 +249,30 @@ class AmendmentParser:
                                   .replace('\n', ' '))
                     results  = []
                     restored = self._restore_content(block_text, content_map)
-                    scope, target, par_art, par_clause = self._extract_scope_full(restored)
+                    multi_scopes = self._extract_all_replace_scopes(restored)
+                    if not multi_scopes:
+                        scope, target, par_art, par_clause = self._extract_scope_full(restored)
+                        multi_scopes = [dict(
+                            target_id=target or par_art or "",
+                            target_scope=scope,
+                            parent_article_id=par_art,
+                            parent_clause_id=par_clause,
+                        )]
                     for ot in old_tokens:
                         old_phrase = (content_map.get(ot, "")
                                       .strip().strip('""\u201c\u201d').strip()
                                       .replace('\n', ' '))
-                        if old_phrase and new_phrase:
+                        if not old_phrase or not new_phrase:
+                            continue
+                        for s in multi_scopes:
                             results.append(Amendment(
                                 operation=OperationType.REPLACE,
-                                target_id=target or par_art or "",
-                                target_scope=scope,
+                                target_id=s['target_id'],
+                                target_scope=s['target_scope'],
                                 old_phrase=old_phrase,
                                 new_phrase=new_phrase,
-                                parent_article_id=par_art,
-                                parent_clause_id=par_clause,
+                                parent_article_id=s['parent_article_id'],
+                                parent_clause_id=s['parent_clause_id'],
                                 source_doc=source,
                                 effective_date=date,
                                 amending_article=art_label,
@@ -277,7 +292,7 @@ class AmendmentParser:
                 parent_art   = f"Điều {dieu}"
                 # Thu thập tất cả item IDs từ scope
                 first_item = pwi_m.group('first').lower()
-                rest_items = re.findall(r'\(((?:i{1,3}|iv|vi{0,3}|ix|x))\)',
+                rest_items = re.findall(rf'\(({_ROMAN_PAT})\)',
                                         pwi_m.group('rest'), re.IGNORECASE)
                 all_items  = [f"({first_item})"] + [f"({r.lower()})" for r in rest_items]
                 # Lấy nội dung và tách theo từng tiết
@@ -322,26 +337,24 @@ class AmendmentParser:
                     point = (pm.group(1) + ")") if pm else ""
                     restored_pb = self._restore_content(pb, content_map)
                     new_content = self._extract_content_for_token(pb, content_map)
-                    a = self._parse_paragraph(
+                    for a in self._parse_paragraph(
                         restored_pb, source, date,
                         amending_article=art_label,
                         amending_clause=c_label,
                         amending_point=point,
-                    )
-                    if a:
+                    ):
                         if not a.content:
                             a.content = new_content
                         results.append(a)
             else:
                 restored    = self._restore_content(block_text, content_map)
                 new_content = self._extract_content_for_token(block_text, content_map)
-                a = self._parse_paragraph(
+                for a in self._parse_paragraph(
                     restored, source, date,
                     amending_article=art_label,
                     amending_clause=c_label,
                     amending_point="",
-                )
-                if a:
+                ):
                     if not a.content:
                         a.content = new_content
                     results.append(a)
@@ -351,7 +364,7 @@ class AmendmentParser:
         if not has_clause_numbers:
             cleaned = []
             for l in lines:
-                m = re.match(r'^(?:Điều|ĐIỀU)\s+\d+[a-zđ]?\.\s+(.*)', l.strip(),
+                m = re.match(r'^(?:Điều|ĐIỀU)\s+\d+[a-zđ]?[\.:][ \t]*(.*)', l.strip(),
                              re.IGNORECASE | re.DOTALL)
                 cleaned.append(m.group(1) if m else l)
             return flush_clause("", cleaned)
@@ -361,7 +374,7 @@ class AmendmentParser:
             stripped = line.strip()
             if not stripped:
                 continue
-            if re.match(r'^(?:Điều|ĐIỀU)\s+\d+[a-zđ]?\.', stripped, re.IGNORECASE):
+            if re.match(r'^(?:Điều|ĐIỀU)\s+\d+[a-zđ]?[\.:]', stripped, re.IGNORECASE):
                 continue
             cm = re.match(r'^(\d+)\.\s+\S', stripped)
             if cm:
@@ -384,8 +397,8 @@ class AmendmentParser:
     def _parse_paragraph(self, text: str, source: str, date: str,
                           amending_article: str = "",
                           amending_clause:  str = "",
-                          amending_point:   str = "") -> Optional[Amendment]:
-        """Nhận dạng loại thao tác và đích của một đoạn văn."""
+                          amending_point:   str = "") -> list:
+        """Nhận dạng loại thao tác và đích của một đoạn văn. Trả về list Amendment."""
         base_kwargs = dict(
             source_doc=source, effective_date=date,
             amending_article=amending_article,
@@ -398,53 +411,68 @@ class AmendmentParser:
             scope, target, parent_art, parent_clause = self._extract_scope_full(text)
             new_name = self._extract_new_content(text)
             if target:
-                return Amendment(
+                return [Amendment(
                     operation=OperationType.RENAME,
                     target_id=target, target_scope=scope,
                     content=new_name,
                     parent_article_id=parent_art,
                     parent_clause_id=parent_clause,
-                    **base_kwargs)
+                    **base_kwargs)]
 
         # 0. MODIFY_AND_INSERT (kiểm tra trước MODIFY đơn thuần)
         if self._OP_MODIFY_AND_INSERT.search(text):
             scope, target, parent_art, parent_clause = self._extract_scope_full(text)
             content = self._extract_new_content(text)
             if target:
-                return Amendment(
+                return [Amendment(
                     operation=OperationType.MODIFY_AND_INSERT,
                     target_id=target, target_scope=scope,
                     content=content,
                     parent_article_id=parent_art,
                     parent_clause_id=parent_clause,
-                    **base_kwargs)
+                    **base_kwargs)]
 
         # 1. Thay cụm từ
         m = self._OP_REPLACE.search(text)
         if m:
+            old_ph, new_ph = m.group(1), m.group(2)
+            multi_scopes = self._extract_all_replace_scopes(text)
+            if multi_scopes:
+                return [Amendment(
+                    operation=OperationType.REPLACE,
+                    target_id=s['target_id'], target_scope=s['target_scope'],
+                    old_phrase=old_ph, new_phrase=new_ph,
+                    parent_article_id=s['parent_article_id'],
+                    parent_clause_id=s['parent_clause_id'],
+                    **base_kwargs,
+                ) for s in multi_scopes]
             scope, target, parent_art, parent_clause = self._extract_scope_full(text)
             if target:
-                return Amendment(
+                return [Amendment(
                     operation=OperationType.REPLACE,
                     target_id=target, target_scope=scope,
-                    old_phrase=m.group(1), new_phrase=m.group(2),
+                    old_phrase=old_ph, new_phrase=new_ph,
                     parent_article_id=parent_art,
                     parent_clause_id=parent_clause,
-                    **base_kwargs)
+                    **base_kwargs)]
 
         # 2. Bãi bỏ
         if self._OP_DELETE.search(text):
             # Bỏ qua nếu là bãi bỏ thuộc VB khác ("Điều N Thông tư số X/...")
             if self._RE_EXT_DOC_CITATION.search(text):
-                return None
+                return []
+            # Thử tìm nhiều target cùng lúc ("bãi bỏ khoản 1, 2, 3 Điều 5")
+            multi = self._parse_multi_delete(text, base_kwargs)
+            if multi:
+                return multi
             scope, target, parent_art, parent_clause = self._extract_scope_full(text)
             if target:
-                return Amendment(
+                return [Amendment(
                     operation=OperationType.DELETE,
                     target_id=target, target_scope=scope,
                     parent_article_id=parent_art,
                     parent_clause_id=parent_clause,
-                    **base_kwargs)
+                    **base_kwargs)]
 
         # 3. Bổ sung
         if self._OP_INSERT.search(text):
@@ -452,28 +480,145 @@ class AmendmentParser:
             after   = self._extract_insert_after(text)
             content = self._extract_new_content(text)
             if target:
-                return Amendment(
+                return [Amendment(
                     operation=OperationType.INSERT,
                     target_id=target, target_scope=scope,
                     content=content, insert_after=after,
                     parent_article_id=parent_art,
                     parent_clause_id=parent_clause,
-                    **base_kwargs)
+                    **base_kwargs)]
 
         # 4. Sửa đổi đơn thuần
         if self._OP_MODIFY.search(text):
             scope, target, parent_art, parent_clause = self._extract_scope_full(text)
             content = self._extract_new_content(text)
             if target:
-                return Amendment(
+                return [Amendment(
                     operation=OperationType.MODIFY,
                     target_id=target, target_scope=scope,
                     content=content,
                     parent_article_id=parent_art,
                     parent_clause_id=parent_clause,
-                    **base_kwargs)
+                    **base_kwargs)]
 
-        return None
+        return []
+
+    def _extract_all_replace_scopes(self, text: str) -> list:
+        """
+        Trích tất cả scope đích từ mệnh đề "tại ..." trong lệnh REPLACE nhiều vị trí.
+        Ví dụ: "tại câu mũ khoản 2, điểm b, điểm đ khoản 2 Điều 7"
+               → 3 scope dict: khoản 2, điểm b), điểm đ)
+
+        Trả về list[dict(target_id, target_scope, parent_article_id, parent_clause_id)].
+        Trả về [] nếu chỉ có 1 scope (để caller dùng flow đơn bình thường).
+        """
+        tai_m = re.search(
+            r'tại\s+(?:câu\s+mũ\s+|tiêu\s+đề\s+)?(.+?)(?:\s*\.|$)',
+            text, re.IGNORECASE | re.DOTALL,
+        )
+        if not tai_m:
+            return []
+
+        scope_str = tai_m.group(1).strip()
+
+        # Anchor: Điều cuối cùng trong mệnh đề
+        art_m = re.search(r'(?:Điều|ĐIỀU)\s+(\d+[a-zđ]?)', scope_str, re.IGNORECASE)
+        if not art_m:
+            return []
+        parent_art = f"Điều {art_m.group(1)}"
+
+        # Khoản cuối cùng — fallback cho điểm không khai rõ khoản
+        khoan_m = re.search(r'khoản\s+(\d+(?:\.\d+)?)', scope_str, re.IGNORECASE)
+        parent_clause_default = khoan_m.group(1) if khoan_m else ""
+
+        scopes = []
+
+        # "câu mũ khoản Y" → body của khoản Y chính nó (không phải node con)
+        for m in re.finditer(r'câu\s+mũ\s+khoản\s+(\d+(?:\.\d+)?)', scope_str, re.IGNORECASE):
+            k = m.group(1)
+            scopes.append(dict(
+                target_id=k,
+                target_scope=f"khoản {k} {parent_art}",
+                parent_article_id=parent_art,
+                parent_clause_id="",
+            ))
+
+        # "điểm X [khoản Y [Điều Z]]"
+        for m in re.finditer(
+            r'điểm\s+([a-zđ])\)?\s*'
+            r'(?:khoản\s+(\d+(?:\.\d+)?)\s*'
+            r'(?:(?:Điều|ĐIỀU)\s+(\d+[a-zđ]?))?)?',
+            scope_str, re.IGNORECASE,
+        ):
+            point = m.group(1).lower() + ")"
+            k = m.group(2) or parent_clause_default
+            a = f"Điều {m.group(3)}" if m.group(3) else parent_art
+            scopes.append(dict(
+                target_id=point,
+                target_scope=(f"điểm {point} khoản {k} {a}" if k
+                              else f"điểm {point} {a}"),
+                parent_article_id=a,
+                parent_clause_id=k,
+            ))
+
+        # Loại bỏ trùng lặp, giữ thứ tự
+        seen, unique = set(), []
+        for s in scopes:
+            key = (s['target_id'], s['parent_article_id'], s['parent_clause_id'])
+            if key not in seen:
+                seen.add(key)
+                unique.append(s)
+
+        return unique if len(unique) > 1 else []
+
+    def _parse_multi_delete(self, text: str, base_kwargs: dict) -> list:
+        """
+        Tách lệnh bãi bỏ nhiều target trên cùng một dòng.
+        Ví dụ: "bãi bỏ khoản 1, 2, 3 Điều 5"  → 3 Amendment DELETE
+               "bãi bỏ điểm a, b khoản 1 Điều 5" → 2 Amendment DELETE
+        Trả về [] nếu chỉ có 1 target (để caller tiếp tục xử lý đơn).
+        """
+        art_m = re.search(r'(?:Điều|ĐIỀU)\s+(\d+[a-zđ]?)', text, re.IGNORECASE)
+        if not art_m:
+            return []
+        parent_art = f"Điều {art_m.group(1)}"
+
+        # "bãi bỏ khoản 1, 2, 3 Điều N" hoặc "khoản 1 và 2 Điều N"
+        mc_m = re.search(
+            r'khoản\s+([\d.,\s]*(?:[và]\s*[\d.,\s]*)?)(?:Điều|ĐIỀU)',
+            text, re.IGNORECASE,
+        )
+        if mc_m:
+            ids = re.findall(r'\d+(?:\.\d+)?', mc_m.group(1))
+            if len(ids) > 1:
+                return [Amendment(
+                    operation=OperationType.DELETE,
+                    target_id=cid,
+                    target_scope=f"khoản {cid} {parent_art}",
+                    parent_article_id=parent_art,
+                    parent_clause_id="",
+                    **base_kwargs,
+                ) for cid in ids]
+
+        # "bãi bỏ điểm a, b, c khoản N Điều M"
+        mp_m = re.search(
+            r'điểm\s+([a-zđ](?:\s*[,và]\s*[a-zđ])+)\s+khoản\s+(\d+(?:\.\d+)?)\s+(?:Điều|ĐIỀU)',
+            text, re.IGNORECASE,
+        )
+        if mp_m:
+            letters = re.findall(r'[a-zđ]', mp_m.group(1), re.IGNORECASE)
+            khoan = mp_m.group(2)
+            if len(letters) > 1:
+                return [Amendment(
+                    operation=OperationType.DELETE,
+                    target_id=lt.lower() + ")",
+                    target_scope=f"điểm {lt.lower()}) khoản {khoan} {parent_art}",
+                    parent_article_id=parent_art,
+                    parent_clause_id=khoan,
+                    **base_kwargs,
+                ) for lt in letters]
+
+        return []
 
     # ─────────────────────────────────────────────────────
     # Trích xuất scope
@@ -505,7 +650,7 @@ class AmendmentParser:
             return m.group(1), parent_art, parent_clause
 
         # điểm b(i) — tiết trong điểm: trả về tiết đầu tiên
-        m = re.search(r'điểm\s+([a-zđ])\s*\(((?:i{1,3}|iv|vi{0,3}|ix|x))\)', sl, re.IGNORECASE)
+        m = re.search(rf'điểm\s+([a-zđ])\s*\(({_ROMAN_PAT})\)', sl, re.IGNORECASE)
         if m:
             point_id  = m.group(1) + ")"
             item_code = m.group(2)
@@ -522,6 +667,7 @@ class AmendmentParser:
                 parent_clause = km.group(1)
             return m.group(1) + ")", parent_art, parent_clause
 
+        # tiểu khoản x.y (không kèm Điều)
         m = re.search(r'khoản\s+(\d+\.\d+)', sl)
         if m:
             return m.group(1), parent_art, ""
@@ -566,7 +712,7 @@ class AmendmentParser:
             return [""] * len(item_ids)
 
         _roman_boundary = re.compile(
-            r'(?=\((?:i{1,3}|iv|vi{0,3}|ix|x)\))',
+            rf'(?=\({_ROMAN_PAT}\))',
             re.IGNORECASE,
         )
         raw_parts = _roman_boundary.split(content.strip())
@@ -575,7 +721,7 @@ class AmendmentParser:
             part = part.strip()
             if not part:
                 continue
-            m = re.match(r'^(\((?:i{1,3}|iv|vi{0,3}|ix|x)\))', part, re.IGNORECASE)
+            m = re.match(rf'^(\({_ROMAN_PAT}\))', part, re.IGNORECASE)
             if m:
                 parts_map[m.group(1).lower()] = part
 

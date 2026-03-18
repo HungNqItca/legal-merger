@@ -22,11 +22,14 @@ _RE_SUB_CLAUSE = re.compile(r'^(\d+\.\d+)\s+\S')
 # a)  b)  c)  đ)
 _RE_POINT = re.compile(r'^([a-zđ])\)\s', re.UNICODE)
 
-# -  (gạch đầu dòng)  hoặc  i)  ii)  iii)...  hoặc  (i)  (ii)  (iii)...
+# Số La Mã i–xx (thứ tự dài → ngắn để tránh match nhầm prefix)
+_ROMAN_PAT = r'(?:xx|xix|xviii|xvii|xvi|xv|xiv|xiii|xii|xi|x|ix|viii|vii|vi|v|iv|iii|ii|i)'
+
+# -  (gạch đầu dòng)  hoặc  i)  ii)  ...  xx)  hoặc  (i)  (ii)  ...  (xx)
 _RE_ITEM = re.compile(
     r'^(?:-\s'
-    r'|\((?:i{1,3}|iv|vi{0,3}|ix|x)\)\s'   # dạng (i)  (ii) ...
-    r'|(?:i{1,3}|iv|vi{0,3}|ix|x)\)\s'      # dạng i)   ii) ...
+    rf'|\({_ROMAN_PAT}\)\s'   # dạng (i)  (ii) ... (xx)
+    rf'|{_ROMAN_PAT}\)\s'     # dạng i)   ii) ... xx)
     r')',
     re.IGNORECASE
 )

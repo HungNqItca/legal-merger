@@ -111,17 +111,19 @@ class MergeEngine:
             node = self._find_node_in_context(tid, a.parent_article_id, a.parent_clause_id, a.parent_point_id)
             if node:
                 node_text = node.get_text()
-                if a.old_phrase.lower() not in node_text.lower():
+                # Chuẩn hoá newline → space để xử lý từ bị PDF ngắt dòng giữa chừng
+                node_text_flat = node_text.replace('\n', ' ')
+                if a.old_phrase.lower() not in node_text_flat.lower():
                     self._warn(
                         f'Cụm từ "{a.old_phrase}" không tìm thấy trong '
                         f'"{a.target_scope or tid}" — bỏ qua (đã được thay trước đó?)')
                 else:
                     a.original_content = self._extract_sentence_with_phrase(
-                        node_text, a.old_phrase)
+                        node_text_flat, a.old_phrase)
                     a.node_title = self._node_scope_label(node, a.target_scope)
                     self._replace_phrase(node, a.old_phrase, a.new_phrase)
                     new_sentence = self._extract_sentence_with_phrase(
-                        node.get_text(), a.new_phrase)
+                        node.get_text().replace('\n', ' '), a.new_phrase)
                     node.add_citation(citation)
                     node.add_change(
                         f'Thay "{a.old_phrase}" → "{a.new_phrase}" theo {a.source_doc}')
@@ -153,9 +155,19 @@ class MergeEngine:
                                parent_article_id: str = "",
                                parent_clause_id:  str = "",
                                parent_point_id:   str = "") -> Optional[Node]:
-        """Tìm node có ngữ cảnh cha để tránh tìm nhầm."""
+        """Tìm node có ngữ cảnh cha để tránh tìm nhầm.
+
+        Nếu parent_article_id không tìm thấy chính xác, thử tìm gần đúng
+        (bỏ qua suffix chữ cái) trước khi fallback về tìm toàn cục.
+        """
         if parent_article_id:
             parent = self._find_node(parent_article_id)
+            # Fallback: thử tìm gần đúng (ví dụ "Điều 3a" → "Điều 3")
+            if parent is None:
+                base_id = re.sub(r'([Đđ]iều\s+\d+)[a-zđ]', r'\1', parent_article_id,
+                                 flags=re.IGNORECASE)
+                if base_id != parent_article_id:
+                    parent = self._find_node(base_id)
             if parent:
                 if parent_clause_id:
                     clause_node = parent.find(parent_clause_id)
@@ -204,18 +216,31 @@ class MergeEngine:
     def _replace_phrase(self, node: Node, old: str, new: str):
         """
         Thay cụm từ trong toàn cây node.
-        Dùng negative lookahead khi old là prefix của new để tránh double-apply.
+        - Dùng negative lookahead khi old là prefix của new để tránh double-apply.
+        - Nối body_lines thành chuỗi phẳng trước khi thay để xử lý cụm từ bị
+          PDF ngắt dòng giữa chừng (ví dụ: "Hệ thống thanh toán\nđiện tử...").
         """
+        node.label = self._subst_phrase(node.label, old, new)
+
+        if node.body_lines:
+            # Nối các dòng, thay trên chuỗi phẳng, lưu lại thành 1 dòng nếu có thay đổi
+            flat     = ' '.join(node.body_lines)
+            replaced = self._subst_phrase(flat, old, new)
+            if replaced != flat:
+                node.body_lines = [replaced]
+            else:
+                node.body_lines = [self._subst_phrase(l, old, new) for l in node.body_lines]
+
+        for child in node.children:
+            self._replace_phrase(child, old, new)
+
+    def _subst_phrase(self, text: str, old: str, new: str) -> str:
+        """Thay old→new trong text, có negative lookahead khi old là prefix của new."""
         if new.startswith(old) and new != old:
             suffix  = re.escape(new[len(old):])
             pattern = re.compile(re.escape(old) + r'(?!' + suffix + r')')
-            node.label      = pattern.sub(new, node.label)
-            node.body_lines = [pattern.sub(new, l) for l in node.body_lines]
-        else:
-            node.label      = node.label.replace(old, new)
-            node.body_lines = [l.replace(old, new) for l in node.body_lines]
-        for child in node.children:
-            self._replace_phrase(child, old, new)
+            return pattern.sub(new, text)
+        return text.replace(old, new)
 
     def _insert_node(self, a: Amendment) -> Optional[Node]:
         ntype    = self._guess_node_type(a.target_id)
@@ -311,11 +336,9 @@ class MergeEngine:
     def _extract_sentence_with_phrase(self, text: str, phrase: str) -> str:
         if not phrase or not text:
             return text
-        sentences = re.split(r'(?<=[.;])\s+|\n', text)
+        flat = text.replace('\n', ' ')
+        sentences = re.split(r'(?<=[.;])\s+', flat)
         for sent in sentences:
             if phrase.lower() in sent.lower():
                 return sent.strip()
-        for line in text.splitlines():
-            if phrase.lower() in line.lower():
-                return line.strip()
-        return text[:200] + ("…" if len(text) > 200 else "")
+        return flat[:200] + ("…" if len(flat) > 200 else "")

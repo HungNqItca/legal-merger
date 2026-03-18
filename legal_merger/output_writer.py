@@ -3,9 +3,20 @@ output_writer.py — Xuất văn bản hợp nhất ra TXT / DOCX / JSON.
 """
 
 import json
+import re
 from datetime import datetime
 
 from .models import Node, NodeType
+
+# Dòng kết thúc câu hoàn chỉnh (không bị ngắt giữa chừng bởi PDF)
+_SENTENCE_END = re.compile(r'[.;!?:»"]\s*$')
+
+# Dòng bắt đầu một phần tử cấu trúc mới (không phải continuation)
+_STRUCTURAL_LINE = re.compile(
+    r'^\s*(?:\d+[.\)]\s|[a-zđ]\)\s|-\s|'
+    r'(?:xx|xix|xviii|xvii|xvi|xv|xiv|xiii|xii|xi|x|ix|viii|vii|vi|v|iv|iii|ii|i)[)\s])',
+    re.IGNORECASE
+)
 
 
 _INDENT = {
@@ -127,7 +138,21 @@ class OutputWriter:
                 cr.font.size      = Pt(8.5)
                 cr.font.italic    = True
 
-        for bl in node.body_lines:
+        body = self._merge_wrapped_lines(list(node.body_lines))
+
+        # Label→body continuation: nếu label kết thúc giữa câu và body_line đầu
+        # tiên là tiếp nối (chữ thường, không phải phần tử cấu trúc) → nối vào
+        # cùng một đoạn với label thay vì tạo paragraph mới.
+        if (body
+                and not _SENTENCE_END.search(node.label)
+                and body[0]
+                and body[0][0].islower()
+                and not _STRUCTURAL_LINE.match(body[0])):
+            cont = p.add_run(' ' + body[0].lstrip())
+            cont.font.size = run.font.size
+            body = body[1:]
+
+        for bl in body:
             bp = doc.add_paragraph(bl)
             bp.paragraph_format.left_indent = Cm((depth + 0.5) * 0.7)
             bp.paragraph_format.space_after = Pt(1)
@@ -136,6 +161,31 @@ class OutputWriter:
 
         for child in node.children:
             self._render_docx(doc, child, depth + 1)
+
+    # ── Helpers ───────────────────────────────────────────
+
+    @staticmethod
+    def _merge_wrapped_lines(lines: list) -> list:
+        """Nối các dòng bị PDF ngắt giữa câu thành một dòng logic.
+
+        Một dòng được coi là tiếp nối (continuation) nếu:
+        - Dòng trước KHÔNG kết thúc bằng dấu câu kết thúc (.;!?:»")
+        - Dòng kế bắt đầu bằng chữ thường (không phải phần tử cấu trúc)
+        """
+        if not lines:
+            return lines
+        merged = [lines[0]]
+        for line in lines[1:]:
+            prev = merged[-1]
+            if (prev
+                    and not _SENTENCE_END.search(prev)
+                    and line
+                    and line[0].islower()
+                    and not _STRUCTURAL_LINE.match(line)):
+                merged[-1] = prev.rstrip() + ' ' + line.lstrip()
+            else:
+                merged.append(line)
+        return merged
 
     # ── Báo cáo JSON ──────────────────────────────────────
 
