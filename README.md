@@ -1,6 +1,6 @@
 # Legal Merger — Công cụ hợp nhất văn bản pháp lý
 
-**Phiên bản:** v5.0
+**Phiên bản:** v5.2
 **Ngôn ngữ:** Python 3.7+
 **Hỗ trợ đầu vào:** `.txt` · `.docx` · `.pdf`
 **Hỗ trợ đầu ra:** `.txt` · `.docx` · `.xlsx` + báo cáo thay đổi `.json`
@@ -16,11 +16,12 @@
 5. [Tham chiếu trong văn bản hợp nhất](#5-tham-chiếu-trong-văn-bản-hợp-nhất)
 6. [Bảng so sánh nội dung cũ / mới](#6-bảng-so-sánh-nội-dung-cũ--mới)
 7. [Sử dụng dòng lệnh (CLI)](#7-sử-dụng-dòng-lệnh-cli)
-8. [Sử dụng như thư viện Python](#8-sử-dụng-như-thư-viện-python)
-9. [Tệp kết quả đầu ra](#9-tệp-kết-quả-đầu-ra)
-10. [Kiến trúc kỹ thuật](#10-kiến-trúc-kỹ-thuật)
-11. [Câu hỏi thường gặp](#11-câu-hỏi-thường-gặp)
-12. [Lịch sử phiên bản](#12-lịch-sử-phiên-bản)
+8. [Sử dụng giao diện đồ họa (GUI)](#8-sử-dụng-giao-diện-đồ-họa-gui)
+9. [Sử dụng như thư viện Python](#9-sử-dụng-như-thư-viện-python)
+10. [Tệp kết quả đầu ra](#10-tệp-kết-quả-đầu-ra)
+11. [Kiến trúc kỹ thuật](#11-kiến-trúc-kỹ-thuật)
+12. [Câu hỏi thường gặp](#12-câu-hỏi-thường-gặp)
+13. [Lịch sử phiên bản](#13-lịch-sử-phiên-bản)
 
 ---
 
@@ -72,8 +73,9 @@ pip install python-docx pdfplumber openpyxl
 | `python-docx` | Đọc / xuất file `.docx` | Khi dùng đầu vào/ra `.docx` |
 | `pdfplumber` | Trích xuất văn bản từ `.pdf` | Khi dùng đầu vào `.pdf` |
 | `openpyxl` | Tạo bảng so sánh `.xlsx` | Khi dùng `--cmp-format xlsx` |
+| `PyQt6` | Giao diện đồ họa (GUI) | Khi dùng `--gui` hoặc `gui_app.py` |
 
-> **Lưu ý:** Nếu chỉ làm việc với file `.txt` và không cần bảng Excel, không cần cài thêm thư viện nào.
+> **Lưu ý:** Nếu chỉ làm việc với file `.txt` và không cần bảng Excel hay GUI, không cần cài thêm thư viện nào.
 
 ### Kiểm tra cài đặt
 
@@ -354,7 +356,76 @@ python -m legal_merger luat_goc.docx \
 
 ---
 
-## 8. Sử dụng như thư viện Python
+## 8. Sử dụng giao diện đồ họa (GUI)
+
+### Cài đặt PyQt6
+
+```bash
+pip install PyQt6
+```
+
+### Khởi chạy GUI
+
+```bash
+# Cách 1 — qua flag --gui của CLI
+python -m legal_merger --gui
+
+# Cách 2 — chạy script riêng ở thư mục gốc
+python gui_app.py
+```
+
+### Giao diện
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Legal Merger — Hợp nhất văn bản pháp luật                  │
+├─────────────────────────────────────────────────────────────┤
+│ [Văn bản đầu vào]                                           │
+│   Văn bản gốc:     [________________________] [Chọn…]       │
+│   Văn bản sửa đổi:                            [Thêm file…] │
+│   ┌────────────────────────────────────────────────────┐    │
+│   │  30-suadoi-15.pdf                                  │    │
+│   └────────────────────────────────────────────────────┘    │
+├─────────────────────────────────────────────────────────────┤
+│ [Kết quả đầu ra]                                            │
+│   File kết quả:    [________________________] [Lưu tại…]   │
+│   Định dạng:       (●) TXT   ( ) DOCX                       │
+├─────────────────────────────────────────────────────────────┤
+│ [Tùy chọn]                                                  │
+│   [✓] Tạo bảng so sánh  →  [✓] DOCX  [✓] XLSX             │
+│   [✓] Hiện điều khoản đã bãi bỏ                             │
+│   [✓] Xóa số trang / header / footer                        │
+├─────────────────────────────────────────────────────────────┤
+│             [ ▶  HỢP NHẤT VĂN BẢN ]                        │
+├─────────────────────────────────────────────────────────────┤
+│ [Nhật ký xử lý]                                             │
+│   ══════════════════════════════════════════════════        │
+│     HỢP NHẤT VĂN BẢN PHÁP LÝ  v3.0                        │
+│   ✅ 23 Điều — 156 node tổng cộng                           │
+│   ✅ Hoàn tất!                                               │
+├─────────────────────────────────────────────────────────────┤
+│ [Kết quả] [Mở văn bản hợp nhất] [Mở bảng DOCX] [Mở XLSX]  │
+│           [Mở thư mục]                                      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Tính năng GUI
+
+| Tính năng | Mô tả |
+|-----------|-------|
+| **File picker** | Chọn file PDF / DOCX / TXT qua hộp thoại hệ thống |
+| **Danh sách sửa đổi** | Thêm nhiều file, click chọn rồi nhấn "Xóa chọn" để loại bỏ |
+| **Định dạng đầu ra** | Radio button TXT / DOCX, tự động cập nhật phần mở rộng file |
+| **Bảng so sánh** | Bật/tắt; chọn riêng DOCX hoặc XLSX hoặc cả hai |
+| **Xử lý nền** | Merge chạy trên luồng riêng — GUI không bị đóng băng |
+| **Nhật ký real-time** | Toàn bộ output từ quá trình merge hiện trong vùng log |
+| **Mở kết quả** | Nút mở trực tiếp từng file đầu ra hoặc mở thư mục chứa |
+
+> **Lưu ý:** GUI cung cấp đầy đủ các tùy chọn tương đương CLI. Không có tính năng nào bị giới hạn so với dòng lệnh.
+
+---
+
+## 9. Sử dụng như thư viện Python
 
 ### Hàm chính
 
@@ -437,7 +508,7 @@ builder.write_xlsx("bang_so_sanh.xlsx")
 
 ---
 
-## 9. Tệp kết quả đầu ra
+## 10. Tệp kết quả đầu ra
 
 Mỗi lần chạy tạo ra **tối đa 4 file** (dựa trên tên file output `ket_qua.txt`):
 
@@ -471,14 +542,14 @@ Mỗi lần chạy tạo ra **tối đa 4 file** (dựa trên tên file output `
 
 ---
 
-## 10. Kiến trúc kỹ thuật
+## 11. Kiến trúc kỹ thuật
 
 ### Cấu trúc package
 
 ```
 legal_merger/
 ├── __init__.py          # Re-export public API
-├── __main__.py          # CLI: python -m legal_merger
+├── __main__.py          # CLI: python -m legal_merger [--gui]
 ├── models.py            # Node, Amendment, ComparisonRow, NodeType, OperationType
 ├── patterns.py          # Regex cấu trúc (_RE_ARTICLE, _RE_CLAUSE, ...)
 ├── page_cleaner.py      # PageCleaner, read_file, clean_page_artifacts, extract_title
@@ -487,10 +558,12 @@ legal_merger/
 ├── merge_engine.py      # MergeEngine → áp dụng Amendment vào cây
 ├── output_writer.py     # OutputWriter → TXT / DOCX / JSON
 ├── comparison_builder.py# ComparisonTableBuilder → DOCX + XLSX bảng so sánh
-└── orchestrator.py      # merge_legal_documents() — điều phối toàn pipeline
+├── orchestrator.py      # merge_legal_documents() — điều phối toàn pipeline
+└── gui.py               # LegalMergerApp (PyQt6) + run_gui()
 ```
 
 `legal_merger.py` ở thư mục gốc là **shim tương thích ngược** — chỉ gọi vào package.
+`gui_app.py` ở thư mục gốc là **shim khởi chạy GUI** — gọi `run_gui()` từ package.
 
 ### Pipeline xử lý
 
@@ -549,7 +622,7 @@ Parser phát hiện pattern `Điều N {DocType} số M` và **bỏ qua hoàn to
 
 ---
 
-## 11. Câu hỏi thường gặp
+## 12. Câu hỏi thường gặp
 
 **Q: "Sửa đổi, bổ sung" khác gì "Sửa đổi" đơn thuần?**
 A: Về xử lý kỹ thuật, cả hai đều thay toàn bộ nội dung. Điểm khác: "Sửa đổi, bổ sung" hiển thị nhãn màu tím riêng trong bảng so sánh, phản ánh đúng bản chất pháp lý.
@@ -589,11 +662,13 @@ A: Công cụ được thiết kế cho văn bản pháp lý tiếng Việt. T�
 
 ---
 
-## 12. Lịch sử phiên bản
+## 13. Lịch sử phiên bản
 
 | Phiên bản | Thay đổi chính |
 |-----------|----------------|
-| **v5.0** | Tái cấu trúc thành package (`legal_merger/` với 9 module); `python -m legal_merger` CLI; trích tiêu đề chính thức từ nội dung (`extract_title`); nhận dạng tiết trong điểm `điểm b(i),(ii)`; bộ lọc bãi bỏ thuộc văn bản ngoài; sửa double-replacement bằng negative lookahead |
+| **v5.2** | Thêm giao diện đồ họa PyQt6 (`gui.py`): file picker, danh sách văn bản sửa đổi, log real-time, mở kết quả; khởi chạy qua `--gui` hoặc `python gui_app.py` |
+| **v5.1** | Cải thiện độ ổn định; sửa lỗi xuất DOCX |
+| **v5.0** | Tái cấu trúc thành package (`legal_merger/` với 10 module); `python -m legal_merger` CLI; trích tiêu đề chính thức từ nội dung (`extract_title`); nhận dạng tiết trong điểm `điểm b(i),(ii)`; bộ lọc bãi bỏ thuộc văn bản ngoài; sửa double-replacement bằng negative lookahead |
 | **v4.0** | Thêm `MODIFY_AND_INSERT`; tìm kiếm có ngữ cảnh cha (`parent_article_id`, `parent_clause_id`); nhận dạng nội dung thay thế trong ngoặc kép; xử lý Điều một lệnh không có khoản số |
 | **v3.0** | Bảng so sánh nội dung cũ/mới (DOCX + Excel); snapshot `original_content`; màu sắc theo loại thao tác; `--no-comparison`, `--cmp-format` |
 | **v2.0** | Cấu trúc dữ liệu Node cây 5 cấp; tham chiếu inline; chiến lược Mask → Parse → Restore |

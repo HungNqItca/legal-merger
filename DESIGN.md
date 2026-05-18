@@ -1,6 +1,6 @@
 # DESIGN.md — Tài liệu thiết kế Legal Merger
 
-> Phiên bản: v5.1 · Cập nhật: 2026-03-18
+> Phiên bản: v5.2 · Cập nhật: 2026-05-18
 
 ---
 
@@ -18,6 +18,7 @@
    - 4.6 [output_writer.py](#46-output_writerpy)
    - 4.7 [comparison_builder.py](#47-comparison_builderpy)
    - 4.8 [orchestrator.py](#48-orchestratorpy)
+   - 4.9 [gui.py](#49-guipy)
 5. [Quyết định thiết kế quan trọng](#5-quyết-định-thiết-kế-quan-trọng)
 6. [Giới hạn đã biết](#6-giới-hạn-đã-biết)
 7. [Luồng dữ liệu đầy đủ](#7-luồng-dữ-liệu-đầy-đủ)
@@ -89,8 +90,8 @@ Legal Merger giải quyết bài toán **hợp nhất văn bản pháp luật ti
 
 ```
 legal_merger/
-├── __init__.py          # Re-export public API
-├── __main__.py          # Điểm vào CLI: python -m legal_merger
+├── __init__.py          # Re-export public API (kể cả run_gui)
+├── __main__.py          # Điểm vào CLI: python -m legal_merger [--gui]
 ├── models.py            # Node, Amendment, ComparisonRow, enums, _ids_match
 ├── patterns.py          # Regex cấu trúc + _ROMAN_PAT
 ├── page_cleaner.py      # PageCleaner, read_file, extract_title
@@ -99,7 +100,8 @@ legal_merger/
 ├── merge_engine.py      # MergeEngine
 ├── output_writer.py     # OutputWriter
 ├── comparison_builder.py# ComparisonTableBuilder
-└── orchestrator.py      # merge_legal_documents()
+├── orchestrator.py      # merge_legal_documents()
+└── gui.py               # LegalMergerApp (PyQt6), MergeWorker, run_gui()
 ```
 
 ---
@@ -387,6 +389,71 @@ Mỗi entry → một `ComparisonRow`:
 4. `OutputWriter` → văn bản hợp nhất + JSON report
 5. `ComparisonTableBuilder` → DOCX + XLSX (nếu bật)
 6. Trả `dict` kết quả (đường dẫn file, số liệu thống kê)
+
+### 4.9 gui.py
+
+Giao diện đồ họa PyQt6. Không chứa logic nghiệp vụ — chỉ gọi `merge_legal_documents()` từ `orchestrator.py`.
+
+#### Kiến trúc ba lớp
+
+```
+LegalMergerApp (QMainWindow)
+    └─ _run_merge()          ← thu thập tham số từ widgets
+         └─ MergeWorker (QThread)
+               └─ merge_legal_documents(**params)
+                    └─ sys.stdout = _OutputStream
+                                     └─ text_written signal
+                                          └─ _on_log() → QTextEdit.append
+```
+
+#### Các lớp
+
+**`_OutputStream(QObject)`** — bridge `sys.stdout → Qt signal`:
+```python
+def write(self, text): self.text_written.emit(text)   # thread-safe qua Qt signal
+def flush(self): pass
+```
+Redirect `sys.stdout` trước khi gọi `merge_legal_documents()`, restore sau khi xong. Cho phép log real-time từ tất cả `print()` bên trong pipeline mà không cần sửa orchestrator.
+
+**`MergeWorker(QThread)`** — background thread:
+- Nhận `params: dict` (đủ kwargs cho `merge_legal_documents`)
+- Signals: `log_signal(str)`, `finished_signal(dict)`, `error_signal(str)`
+- Trong `run()`: redirect stdout → gọi `merge_legal_documents` → emit kết quả → restore stdout
+
+**`LegalMergerApp(QMainWindow)`** — cửa sổ chính:
+
+| Widget | Vai trò |
+|---|---|
+| `QLineEdit` + `QFileDialog` | Chọn văn bản gốc, chọn đường dẫn output |
+| `QListWidget` + `QFileDialog` | Thêm/xóa danh sách văn bản sửa đổi |
+| `QButtonGroup` (`QRadioButton`) | Chọn định dạng TXT / DOCX |
+| `QCheckBox` (3 cái) | Bảng so sánh, hiện bãi bỏ, xóa số trang |
+| `QPushButton` (run) | Validate → tạo `MergeWorker` → `start()` |
+| `QProgressBar` (indeterminate) | Hiển thị khi worker đang chạy |
+| `QTextEdit` (read-only) | Nhận log từ `_on_log` slot |
+| `QPushButton` (4 cái, ẩn ban đầu) | Mở file kết quả / mở thư mục khi xong |
+
+#### Luồng xử lý
+
+```
+_run_merge()
+  ├─ validate (base_file tồn tại, amendment_files không rỗng)
+  ├─ build params dict từ tất cả widgets
+  ├─ disable nút chạy, show QProgressBar
+  ├─ khởi MergeWorker(params).start()
+  │     [background thread]
+  │     run(): redirect stdout → merge_legal_documents() → emit signals
+  │
+  ├─ _on_log(text)      → QTextEdit.insertPlainText
+  ├─ _on_finished(dict) → enable nút, hide progress, show result buttons
+  └─ _on_error(msg)     → QMessageBox.critical
+```
+
+#### Quyết định thiết kế
+
+- **Thread-safety**: `_OutputStream.write()` emit signal — Qt tự xử lý cross-thread delivery đến main thread (slot `_on_log`). Không cần mutex.
+- **Import lazy**: `__init__.py` import `run_gui` trong `try/except ImportError` — CLI không bị phá nếu PyQt6 chưa cài.
+- **`--gui` thoát sớm**: `__main__.py` kiểm tra `"--gui" in sys.argv` *trước* `argparse.parse_args()` để tránh conflict với positional argument bắt buộc `base_file`.
 
 ---
 

@@ -9,7 +9,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Cài đặt
 
 ```bash
-pip install python-docx pdfplumber openpyxl
+pip install python-docx pdfplumber openpyxl   # bắt buộc
+pip install PyQt6                              # chỉ cần khi dùng GUI
 ```
 
 Yêu cầu Python 3.7+. Không có `requirements.txt` — cài thủ công các thư viện trên.
@@ -28,6 +29,10 @@ python -m legal_merger goc.pdf -a suadoi.pdf -o ket_qua.docx --format docx --cmp
 
 # Nhiều văn bản sửa đổi, bỏ qua bảng so sánh
 python -m legal_merger goc.txt -a sd1.pdf sd2.docx -o hop_nhat.txt --no-comparison
+
+# Mở giao diện đồ họa (GUI) — yêu cầu pip install PyQt6
+python -m legal_merger --gui
+python gui_app.py
 ```
 
 ## API Python
@@ -66,6 +71,7 @@ title = extract_title(text, "goc.pdf")  # → "Thông tư 15/2024/TT-NHNN"
 | `--no-comparison` | Bỏ qua tạo bảng so sánh |
 | `--cmp-format` | `docx`, `xlsx`, hoặc cả hai (mặc định: cả hai) |
 | `--no-clean-pages` | Tắt tính năng xóa số trang/header/footer |
+| `--gui` / `-g` | Mở giao diện đồ họa PyQt6 (bỏ qua mọi tham số khác) |
 
 ## File đầu ra
 
@@ -83,8 +89,8 @@ Code được tổ chức thành package. File `legal_merger.py` gốc là shim 
 
 ```
 legal_merger/
-├── __init__.py          # Re-export public API
-├── __main__.py          # CLI: python -m legal_merger
+├── __init__.py          # Re-export public API (kể cả run_gui)
+├── __main__.py          # CLI: python -m legal_merger [--gui]
 ├── models.py            # Node, Amendment, ComparisonRow, NodeType, OperationType
 ├── patterns.py          # Regex cấu trúc văn bản (_RE_ARTICLE, _RE_CLAUSE, ...)
 ├── page_cleaner.py      # PageCleaner, read_file, clean_page_artifacts, extract_title
@@ -93,8 +99,18 @@ legal_merger/
 ├── merge_engine.py      # MergeEngine → áp dụng Amendment vào cây
 ├── output_writer.py     # OutputWriter → TXT / DOCX / JSON
 ├── comparison_builder.py# ComparisonTableBuilder → DOCX + XLSX bảng so sánh
-└── orchestrator.py      # merge_legal_documents() — điều phối toàn pipeline
+├── orchestrator.py      # merge_legal_documents() — điều phối toàn pipeline
+└── gui.py               # LegalMergerApp (PyQt6), MergeWorker, run_gui()
 ```
+
+`gui_app.py` ở thư mục gốc là shim khởi chạy GUI (`from legal_merger.gui import run_gui; run_gui()`).
+
+### GUI — lớp chính
+
+- **`LegalMergerApp(QMainWindow)`** — cửa sổ chính: file picker, danh sách sửa đổi, tùy chọn, log, kết quả.
+- **`MergeWorker(QThread)`** — chạy `merge_legal_documents()` trên background thread; emit `log_signal`, `finished_signal`, `error_signal`.
+- **`_OutputStream(QObject)`** — chuyển hướng `sys.stdout` sang Qt signal để log real-time.
+- **`run_gui()`** — khởi tạo `QApplication` + `LegalMergerApp`, gọi `sys.exit(app.exec())`.
 
 ### Pipeline xử lý
 

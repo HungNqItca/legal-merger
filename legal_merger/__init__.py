@@ -21,8 +21,14 @@ from .output_writer import OutputWriter
 from .comparison_builder import ComparisonTableBuilder
 from .orchestrator import merge_legal_documents
 
+try:
+    from .gui import run_gui
+except ImportError:
+    pass
+
 __all__ = [
     "merge_legal_documents",
+    "run_gui",
     "DocumentParser", "AmendmentParser", "MergeEngine",
     "OutputWriter", "ComparisonTableBuilder",
     "Node", "Amendment", "ComparisonRow",

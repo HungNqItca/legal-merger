@@ -2,11 +2,17 @@
 __main__.py — Entrypoint CLI: python -m legal_merger ...
 """
 
+import sys
 import argparse
 from .orchestrator import merge_legal_documents
 
 
 def main():
+    if "--gui" in sys.argv or "-g" in sys.argv:
+        from .gui import run_gui
+        run_gui()
+        return
+
     ap = argparse.ArgumentParser(
         description="Hợp nhất văn bản pháp lý (.txt/.docx/.pdf)  v3.0",
         formatter_class=argparse.RawDescriptionHelpFormatter,
