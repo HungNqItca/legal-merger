@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QGroupBox, QLabel, QLineEdit, QPushButton, QListWidget,
     QRadioButton, QButtonGroup, QCheckBox, QTextEdit,
-    QProgressBar, QFileDialog, QMessageBox, QSizePolicy, QSplitter,
+    QProgressBar, QFileDialog, QMessageBox, QSizePolicy, QSplitter, QMenu,
 )
 from PyQt6.QtGui import QDesktopServices
 
@@ -86,25 +86,18 @@ class LegalMergerApp(QMainWindow):
         self._worker: MergeWorker | None = None
         self._result: dict = {}
 
+        self._build_menubar()
+
         central = QWidget()
         self.setCentralWidget(central)
         root = QVBoxLayout(central)
-        root.setSpacing(8)
+        root.setSpacing(6)
         root.setContentsMargins(12, 12, 12, 12)
 
         root.addWidget(self._build_input_group())
         root.addWidget(self._build_output_group())
         root.addWidget(self._build_options_group())
-
-        self._splitter = QSplitter(Qt.Orientation.Horizontal)
-        self._splitter.addWidget(self._build_log_group())
-        self._splitter.addWidget(self._build_result_group())
-        self._splitter.setStretchFactor(0, 4)
-        self._splitter.setStretchFactor(1, 1)
-        self._splitter.setCollapsible(0, False)
-        self._splitter.setCollapsible(1, False)
-        self._splitter.setSizes([800, 180])
-        root.addWidget(self._splitter)
+        root.addWidget(self._build_log_group(), stretch=1)
 
     # ------------------------------------------------------------------
     # UI builders
@@ -143,6 +136,7 @@ class LegalMergerApp(QMainWindow):
         self._amend_list.setToolTip("Chọn item rồi nhấn 'Xóa chọn' để loại bỏ")
         layout.addWidget(self._amend_list)
 
+        box.setFixedHeight(148)
         return box
 
     def _build_output_group(self) -> QGroupBox:
@@ -175,6 +169,7 @@ class LegalMergerApp(QMainWindow):
         fmt_row.addStretch()
         layout.addLayout(fmt_row)
 
+        box.setFixedHeight(88)
         return box
 
     def _build_options_group(self) -> QGroupBox:
@@ -223,6 +218,7 @@ class LegalMergerApp(QMainWindow):
         self._progress.setVisible(False)
         layout.addWidget(self._progress)
 
+        box.setFixedHeight(70)
         return box
 
     def _build_log_group(self) -> QGroupBox:
@@ -231,7 +227,7 @@ class LegalMergerApp(QMainWindow):
 
         self._log = QTextEdit()
         self._log.setReadOnly(True)
-        self._log.setMinimumHeight(180)
+        self._log.setMinimumHeight(80)
         self._log.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._log.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
         font = QFont("Consolas", 9)
@@ -243,42 +239,36 @@ class LegalMergerApp(QMainWindow):
 
         return box
 
-    def _build_result_group(self) -> QGroupBox:
-        self._result_box = QGroupBox("Kết quả")
-        self._result_box.setMinimumWidth(150)
-        layout = QVBoxLayout(self._result_box)
-        layout.setSpacing(6)
+    def _build_menubar(self):
+        mb = self.menuBar()
+        menu = mb.addMenu("Mở file kết quả")
 
-        self._btn_open_main     = QPushButton("Mở văn bản hợp nhất")
-        self._btn_open_cmp_docx = QPushButton("Mở bảng DOCX")
-        self._btn_open_cmp_xlsx = QPushButton("Mở bảng XLSX")
-        self._btn_open_folder   = QPushButton("Mở thư mục")
+        self._action_open_main     = menu.addAction("Mở văn bản hợp nhất")
+        self._action_open_cmp_docx = menu.addAction("Mở bảng so sánh DOCX")
+        self._action_open_cmp_xlsx = menu.addAction("Mở bảng so sánh XLSX")
+        menu.addSeparator()
+        self._action_open_folder   = menu.addAction("Mở thư mục chứa kết quả")
 
-        for btn in (self._btn_open_main, self._btn_open_cmp_docx,
-                    self._btn_open_cmp_xlsx, self._btn_open_folder):
-            btn.setVisible(False)
-            layout.addWidget(btn)
+        for act in (self._action_open_main, self._action_open_cmp_docx,
+                    self._action_open_cmp_xlsx, self._action_open_folder):
+            act.setEnabled(False)
 
-        layout.addStretch()
-
-        self._btn_open_main.clicked.connect(
+        self._action_open_main.triggered.connect(
             lambda: self._open_file(self._result.get("output_file", ""))
         )
-        self._btn_open_cmp_docx.clicked.connect(
+        self._action_open_cmp_docx.triggered.connect(
             lambda: self._open_file(
                 (self._result.get("comparison_files") or {}).get("docx", "")
             )
         )
-        self._btn_open_cmp_xlsx.clicked.connect(
+        self._action_open_cmp_xlsx.triggered.connect(
             lambda: self._open_file(
                 (self._result.get("comparison_files") or {}).get("xlsx", "")
             )
         )
-        self._btn_open_folder.clicked.connect(
+        self._action_open_folder.triggered.connect(
             lambda: self._open_folder(self._result.get("output_file", ""))
         )
-
-        return self._result_box
 
     # ------------------------------------------------------------------
     # Slots — file pickers
@@ -290,6 +280,15 @@ class LegalMergerApp(QMainWindow):
         )
         if path:
             self._base_edit.setText(path)
+            self._reset()
+
+    def _reset(self):
+        self._amend_list.clear()
+        self._log.clear()
+        self._result = {}
+        for act in (self._action_open_main, self._action_open_cmp_docx,
+                    self._action_open_cmp_xlsx, self._action_open_folder):
+            act.setEnabled(False)
 
     def _add_amendment_files(self):
         paths, _ = QFileDialog.getOpenFileNames(
@@ -379,7 +378,6 @@ class LegalMergerApp(QMainWindow):
         )
 
         self._log.clear()
-        self._result_box.setVisible(False)
         self._run_btn.setEnabled(False)
         self._progress.setVisible(True)
 
@@ -403,13 +401,10 @@ class LegalMergerApp(QMainWindow):
         self._progress.setVisible(False)
 
         cmp_files = result.get("comparison_files") or {}
-        self._btn_open_main.setVisible(True)
-        self._btn_open_cmp_docx.setVisible(bool(cmp_files.get("docx")))
-        self._btn_open_cmp_xlsx.setVisible(bool(cmp_files.get("xlsx")))
-        self._btn_open_folder.setVisible(True)
-
-        total = sum(self._splitter.sizes())
-        self._splitter.setSizes([max(200, total - 180), 180])
+        self._action_open_main.setEnabled(True)
+        self._action_open_cmp_docx.setEnabled(bool(cmp_files.get("docx")))
+        self._action_open_cmp_xlsx.setEnabled(bool(cmp_files.get("xlsx")))
+        self._action_open_folder.setEnabled(True)
 
     def _on_error(self, msg: str):
         self._run_btn.setEnabled(True)
