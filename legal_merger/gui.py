@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (
     QRadioButton, QButtonGroup, QCheckBox, QTextEdit,
     QProgressBar, QFileDialog, QMessageBox, QSizePolicy, QSplitter, QMenu,
 )
-from PyQt6.QtGui import QDesktopServices
+from PyQt6.QtGui import QDesktopServices # type: ignore
 
 from .orchestrator import merge_legal_documents
 
