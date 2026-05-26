@@ -1,6 +1,6 @@
 # Legal Merger — Công cụ hợp nhất văn bản pháp lý
 
-**Phiên bản:** v5.2
+**Phiên bản:** v5.4
 **Ngôn ngữ:** Python 3.7+
 **Hỗ trợ đầu vào:** `.txt` · `.docx` · `.pdf`
 **Hỗ trợ đầu ra:** `.txt` · `.docx` · `.xlsx` + báo cáo thay đổi `.json`
@@ -253,8 +253,8 @@ Tham chiếu sử dụng **tiêu đề trích từ nội dung** (VD: `Thông tư
 
 ### Vị trí hiển thị tham chiếu
 
-- **Trong file `.txt`:** In ngay trên cùng dòng, cách bởi hai khoảng trắng
-- **Trong file `.docx`:** In cùng dòng, màu xanh dương `#4472C4`, cỡ chữ 8.5pt, in nghiêng
+- **Trong file `.txt`:** Cuối nội dung node, cách bởi hai khoảng trắng
+- **Trong file `.docx`:** Cuối nội dung node, màu xanh dương `#4472C4`, cỡ chữ 8.5pt, in nghiêng
 
 ---
 
@@ -288,7 +288,7 @@ Tham chiếu sử dụng **tiêu đề trích từ nội dung** (VD: `Thông tư
 
 ### Định dạng đầu ra bảng so sánh
 
-**DOCX** — A4 nằm ngang, header navy, màu hàng theo loại thao tác.
+**DOCX** — A4 nằm ngang, header navy, màu hàng theo loại thao tác. Header cột hiển thị số ngắn (VD: `15/2024/TT-NHNN`) và nhãn "Văn bản sửa đổi".
 
 **XLSX** — 2 sheet:
 - `Bảng so sánh`: dữ liệu đầy đủ, freeze panes, auto filter
@@ -318,17 +318,24 @@ python legal_merger.py <van_ban_goc> -a <file_sua_doi...> [tuỳ chọn]
 | `--format` | `-f` | Định dạng xuất: `txt` hoặc `docx` | `txt` |
 | `--no-deleted` | — | Ẩn các điều khoản đã bị bãi bỏ trong output | Giữ lại |
 | `--no-comparison` | — | Không tạo bảng so sánh | Tạo bảng |
-| `--cmp-format` | — | `docx` `xlsx` hoặc cả hai | `docx xlsx` |
+| `--cmp-format` | — | `docx` `xlsx` hoặc cả hai | `xlsx` |
 | `--no-clean-pages` | — | Tắt tính năng xoá số trang/header/footer | Bật |
 
 ### Ví dụ sử dụng
 
-**Trường hợp điển hình — PDF, bảng so sánh đầy đủ:**
+**Trường hợp điển hình — PDF, bảng so sánh Excel (mặc định):**
+```bash
+python -m legal_merger docs/input/15-ttkdtm.pdf \
+    -a docs/input/30-suadoi-15.pdf \
+    -o docs/output/van_ban_hop_nhat.txt
+```
+
+**Tạo cả hai định dạng bảng so sánh DOCX + XLSX:**
 ```bash
 python -m legal_merger docs/input/15-ttkdtm.pdf \
     -a docs/input/30-suadoi-15.pdf \
     -o docs/output/van_ban_hop_nhat.txt \
-    --cmp-format xlsx
+    --cmp-format docx xlsx
 ```
 
 **Xuất Word, chỉ lấy bảng Excel:**
@@ -378,11 +385,11 @@ python gui_app.py
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ Legal Merger — Hợp nhất văn bản pháp luật                  │
+│ Legal Merger — Hợp nhất văn bản pháp luật  [Mở file kết quả▾]│
 ├─────────────────────────────────────────────────────────────┤
 │ [Văn bản đầu vào]                                           │
 │   Văn bản gốc:     [________________________] [Chọn…]       │
-│   Văn bản sửa đổi:                            [Thêm file…] │
+│   Văn bản sửa đổi:               [Thêm file…] [Xóa chọn]  │
 │   ┌────────────────────────────────────────────────────┐    │
 │   │  30-suadoi-15.pdf                                  │    │
 │   └────────────────────────────────────────────────────┘    │
@@ -391,35 +398,32 @@ python gui_app.py
 │   File kết quả:    [________________________] [Lưu tại…]   │
 │   Định dạng:       (●) TXT   ( ) DOCX                       │
 ├─────────────────────────────────────────────────────────────┤
-│ [Tùy chọn]                                                  │
-│   [✓] Tạo bảng so sánh  →  [✓] DOCX  [✓] XLSX             │
-│   [✓] Hiện điều khoản đã bãi bỏ                             │
-│   [✓] Xóa số trang / header / footer                        │
-├─────────────────────────────────────────────────────────────┤
-│             [ ▶  HỢP NHẤT VĂN BẢN ]                        │
+│ [✓] Bảng so sánh  [ ] DOCX  [✓] XLSX  [✓] Hiện bãi bỏ    │
+│ [✓] Xóa số trang/header        [ ▶  HỢP NHẤT VĂN BẢN ]   │
 ├─────────────────────────────────────────────────────────────┤
 │ [Nhật ký xử lý]                                             │
 │   ══════════════════════════════════════════════════        │
 │     HỢP NHẤT VĂN BẢN PHÁP LÝ  v3.0                        │
 │   ✅ 23 Điều — 156 node tổng cộng                           │
 │   ✅ Hoàn tất!                                               │
-├─────────────────────────────────────────────────────────────┤
-│ [Kết quả] [Mở văn bản hợp nhất] [Mở bảng DOCX] [Mở XLSX]  │
-│           [Mở thư mục]                                      │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+> Menu bar **"Mở file kết quả"** có các mục: Mở văn bản hợp nhất · Mở bảng so sánh DOCX · Mở bảng so sánh XLSX · Mở thư mục chứa kết quả. Tất cả bị disabled cho đến khi merge hoàn tất.
 
 ### Tính năng GUI
 
 | Tính năng | Mô tả |
 |-----------|-------|
-| **File picker** | Chọn file PDF / DOCX / TXT qua hộp thoại hệ thống |
+| **File picker** | Chọn file PDF / DOCX / TXT qua hộp thoại hệ thống; mặc định mở `docs/input` / `docs/output` |
 | **Danh sách sửa đổi** | Thêm nhiều file, click chọn rồi nhấn "Xóa chọn" để loại bỏ |
 | **Định dạng đầu ra** | Radio button TXT / DOCX, tự động cập nhật phần mở rộng file |
-| **Bảng so sánh** | Bật/tắt; chọn riêng DOCX hoặc XLSX hoặc cả hai |
+| **Bảng so sánh** | Bật/tắt; mặc định chỉ XLSX; có thể bật thêm DOCX |
+| **Reset** | Nút "Chọn…" văn bản gốc xóa danh sách sửa đổi, log, và disable menu mở file |
+| **Menu bar** | "Mở file kết quả" — mở từng file hoặc thư mục; chỉ kích hoạt sau khi merge xong |
 | **Xử lý nền** | Merge chạy trên luồng riêng — GUI không bị đóng băng |
-| **Nhật ký real-time** | Toàn bộ output từ quá trình merge hiện trong vùng log |
-| **Mở kết quả** | Nút mở trực tiếp từng file đầu ra hoặc mở thư mục chứa |
+| **Nhật ký real-time** | Toàn bộ output từ quá trình merge hiện trong vùng log; scrollbar luôn hiển thị |
+| **Khởi động** | Cửa sổ mở ở chế độ maximized |
 
 > **Lưu ý:** GUI cung cấp đầy đủ các tùy chọn tương đương CLI. Không có tính năng nào bị giới hạn so với dòng lệnh.
 
@@ -666,6 +670,8 @@ A: Công cụ được thiết kế cho văn bản pháp lý tiếng Việt. T�
 
 | Phiên bản | Thay đổi chính |
 |-----------|----------------|
+| **v5.4** | DOCX hợp nhất: Times New Roman 14pt, canh đều, thụt đầu dòng 1.25cm, giãn dòng 1.15×; citation chuyển về cuối node; gộp dòng ngắt giữa câu (áp dụng cả TXT); header hiển thị số ngắn, nhãn "Văn bản sửa đổi"; sửa lỗi INSERT nhầm bài khi nhiều Điều có cùng số khoản; mặc định `--cmp-format xlsx` |
+| **v5.3** | GUI: menu bar "Mở file kết quả" thay thế nhóm nút; layout cố định height; nút "Chọn…" reset màn hình; mặc định dirs `docs/input`/`docs/output`; scrollbar log luôn hiển thị; khởi động maximized |
 | **v5.2** | Thêm giao diện đồ họa PyQt6 (`gui.py`): file picker, danh sách văn bản sửa đổi, log real-time, mở kết quả; khởi chạy qua `--gui` hoặc `python gui_app.py` |
 | **v5.1** | Cải thiện độ ổn định; sửa lỗi xuất DOCX |
 | **v5.0** | Tái cấu trúc thành package (`legal_merger/` với 10 module); `python -m legal_merger` CLI; trích tiêu đề chính thức từ nội dung (`extract_title`); nhận dạng tiết trong điểm `điểm b(i),(ii)`; bộ lọc bãi bỏ thuộc văn bản ngoài; sửa double-replacement bằng negative lookahead |

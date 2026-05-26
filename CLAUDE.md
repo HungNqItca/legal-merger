@@ -69,7 +69,7 @@ title = extract_title(text, "goc.pdf")  # → "Thông tư 15/2024/TT-NHNN"
 | `--format` | `txt` hoặc `docx` (mặc định: `txt`) |
 | `--no-deleted` | Ẩn các điều đã bị bãi bỏ |
 | `--no-comparison` | Bỏ qua tạo bảng so sánh |
-| `--cmp-format` | `docx`, `xlsx`, hoặc cả hai (mặc định: cả hai) |
+| `--cmp-format` | `docx`, `xlsx`, hoặc cả hai (mặc định: `xlsx`) |
 | `--no-clean-pages` | Tắt tính năng xóa số trang/header/footer |
 | `--gui` / `-g` | Mở giao diện đồ họa PyQt6 (bỏ qua mọi tham số khác) |
 
@@ -107,9 +107,9 @@ legal_merger/
 
 ### GUI — lớp chính
 
-- **`LegalMergerApp(QMainWindow)`** — cửa sổ chính: file picker, danh sách sửa đổi, tùy chọn, log, kết quả.
+- **`LegalMergerApp(QMainWindow)`** — cửa sổ chính: file picker, danh sách sửa đổi, tùy chọn, log; menu bar "Mở file kết quả" (disabled cho đến khi merge xong); khởi động ở chế độ maximized.
 - **`MergeWorker(QThread)`** — chạy `merge_legal_documents()` trên background thread; emit `log_signal`, `finished_signal`, `error_signal`.
-- **`_OutputStream(QObject)`** — chuyển hướng `sys.stdout` sang Qt signal để log real-time.
+- **`_OutputStream`** — chuyển hướng `sys.stdout` sang Qt signal để log real-time (plain Python class, không phải QObject).
 - **`run_gui()`** — khởi tạo `QApplication` + `LegalMergerApp`, gọi `sys.exit(app.exec())`.
 
 ### Pipeline xử lý
@@ -131,8 +131,8 @@ legal_merger/
 - **`DocumentParser`** — Phân tích văn bản gốc thành `(articles_dict, order_list)`. Nhận dạng cấp phân cấp bằng regex từ `patterns.py`.
 - **`AmendmentParser`** — Trích xuất `list[Amendment]`. Chiến lược **Mask→Parse→Restore**: nội dung cần chèn được che bằng token placeholder để tránh bị phân tích nhầm thành cấu trúc, sau đó khôi phục.
 - **`MergeEngine`** — Áp dụng từng `Amendment`. Dùng `_find_node_in_context()` để tìm đúng node theo ngữ cảnh cha (tránh sửa nhầm "Khoản 10" ở Điều khác). `_replace_phrase()` dùng negative lookahead để tránh double-apply khi `new` là prefix của `old`.
-- **`OutputWriter`** — Xuất `.txt`/`.docx`/JSON. Node bị xóa hiển thị `[BÃI BỎ]`; citation xuất hiện nội tuyến (xanh italic trong DOCX).
-- **`ComparisonTableBuilder`** — Bảng nội dung cũ/mới. Tô màu theo loại thao tác; highlight đỏ/xanh lá cho cụm từ thay thế.
+- **`OutputWriter`** — Xuất `.txt`/`.docx`/JSON. Node bị xóa hiển thị `[BÃI BỎ]`; citation xuất hiện cuối nội dung node (xanh italic 8.5pt trong DOCX). DOCX dùng Times New Roman 14pt, canh đều, thụt đầu dòng 1.25cm, giãn dòng 1.15×. Header hiển thị số ngắn (VD: `15/2024/TT-NHNN`). Áp dụng gộp dòng bị ngắt cho cả TXT và DOCX.
+- **`ComparisonTableBuilder`** — Bảng nội dung cũ/mới. Tô màu theo loại thao tác; highlight đỏ/xanh lá cho cụm từ thay thế. Header dùng `_short_title()` và nhãn "Văn bản sửa đổi".
 - **`extract_title(text, file_name)`** — Trích tiêu đề từ nội dung. Ưu tiên `"DocType số/năm/CODE"` từ dòng `Số:`; 3 cấp dự phòng; fallback về tên file.
 
 ### Các loại thao tác (`OperationType`)
