@@ -8,4 +8,4 @@ openpyxl>=3.1.5
 
 # Chỉ cần khi dùng giao diện đồ họa (python -m legal_merger --gui)
 # Bỏ comment dòng dưới hoặc chạy: pip install PyQt6
-# PyQt6>=6.11.0
+PyQt6>=6.11.0
