@@ -20,7 +20,7 @@ set AMEND=%~2
 
 :: Output mặc định nếu không truyền tham số thứ 3
 if "%~3"=="" (
-    set OUTPUT=van_ban_hop_nhat.txt
+    set OUTPUT=docs\output\van_ban_hop_nhat.txt
 ) else (
     set OUTPUT=%~3
 )

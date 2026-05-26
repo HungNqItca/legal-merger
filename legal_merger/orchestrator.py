@@ -30,7 +30,7 @@ def merge_legal_documents(
     print("═" * 58)
 
     if comparison_formats is None:
-        comparison_formats = ["docx", "xlsx"]
+        comparison_formats = ["xlsx"]
 
     # Văn bản gốc
     print(f"\n📄 Văn bản gốc : {base_file}")

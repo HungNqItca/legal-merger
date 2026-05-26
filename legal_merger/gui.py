@@ -184,7 +184,7 @@ class LegalMergerApp(QMainWindow):
         self._chk_cmp.setChecked(True)
         self._chk_cmp.toggled.connect(self._toggle_comparison_formats)
         self._chk_cmp_docx = QCheckBox("DOCX")
-        self._chk_cmp_docx.setChecked(True)
+        self._chk_cmp_docx.setChecked(False)
         self._chk_cmp_xlsx = QCheckBox("XLSX")
         self._chk_cmp_xlsx.setChecked(True)
 

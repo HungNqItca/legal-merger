@@ -194,6 +194,16 @@ class MergeEngine:
                 return res
         return None, -1
 
+    def _find_parent_and_index_in_context(self, target_id: str, parent_article_id: str = ""):
+        """Like _find_parent_and_index but scoped to parent_article_id when provided."""
+        if parent_article_id:
+            art_node = self._find_node(parent_article_id)
+            if art_node:
+                res = self._search_parent(art_node, target_id)
+                if res[0]:
+                    return res
+        return self._find_parent_and_index(target_id)
+
     def _search_parent(self, node: Node, target_id: str):
         for i, child in enumerate(node.children):
             if _ids_match(child.node_id, target_id):
@@ -263,11 +273,11 @@ class MergeEngine:
                 self.order.append(a.target_id)
             self.articles[a.target_id] = new_node
         else:
-            parent, idx = self._find_parent_and_index(a.insert_after)
+            parent, idx = self._find_parent_and_index_in_context(a.insert_after, a.parent_article_id)
             if parent:
                 parent.children.insert(idx + 1, new_node)
             else:
-                fallback = self._find_node(a.insert_after)
+                fallback = self._find_node_in_context(a.insert_after, a.parent_article_id)
                 if fallback:
                     fallback.children.append(new_node)
                 elif self.order:

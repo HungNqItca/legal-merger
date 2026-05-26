@@ -43,7 +43,7 @@ Ví dụ:
     ap.add_argument("--no-comparison", action="store_true",
                     help="Không tạo bảng so sánh nội dung cũ/mới")
     ap.add_argument("--cmp-format", nargs="+",
-                    choices=["docx", "xlsx"], default=["docx", "xlsx"],
+                    choices=["docx", "xlsx"], default=["xlsx"],
                     metavar="FMT",
                     help="Định dạng bảng so sánh: docx xlsx (mặc định: cả hai)")
     ap.add_argument("--no-clean-pages", action="store_true",

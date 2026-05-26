@@ -3,9 +3,20 @@ comparison_builder.py — Xây dựng bảng so sánh nội dung cũ/mới.
 Xuất ra DOCX (A4 ngang) và XLSX.
 """
 
+import re
 from datetime import datetime
 
 from .models import ComparisonRow
+
+
+_DOC_TYPE_PREFIX = re.compile(
+    r'^(?:Thông tư liên tịch|Thông tư|Nghị định|Quyết định|'
+    r'Luật|Pháp lệnh|Chỉ thị|Bộ luật|Hiến pháp|Văn bản)\s+',
+    re.IGNORECASE
+)
+
+def _short_title(title: str) -> str:
+    return _DOC_TYPE_PREFIX.sub('', title).strip()
 
 
 # ── Màu sắc theo loại thao tác ────────────────────────────
@@ -89,8 +100,8 @@ class ComparisonTableBuilder:
             run.font.color.rgb = RGBColor(0x1F, 0x4E, 0x79)
 
         for line in [
-            f"Văn bản gốc    : {self.meta.get('base_doc', '')}",
-            f"Sửa đổi bởi   : {', '.join(self.meta.get('amendment_docs', []))}",
+            f"Văn bản gốc      : {_short_title(self.meta.get('base_doc', ''))}",
+            f"Văn bản sửa đổi  : {', '.join(_short_title(d) for d in self.meta.get('amendment_docs', []))}",
             f"Ngày lập bảng : {self.meta.get('date', datetime.now().strftime('%d/%m/%Y'))}",
             f"Tổng số thay đổi: {len(self.rows)}",
         ]:
@@ -267,8 +278,8 @@ class ComparisonTableBuilder:
 
         meta_rows = [
             "BẢNG SO SÁNH NỘI DUNG THAY ĐỔI",
-            (f"Văn bản gốc: {self.meta.get('base_doc', '')}  |  "
-             f"Sửa đổi bởi: {', '.join(self.meta.get('amendment_docs', []))}"),
+            (f"Văn bản gốc: {_short_title(self.meta.get('base_doc', ''))}  |  "
+             f"Văn bản sửa đổi: {', '.join(_short_title(d) for d in self.meta.get('amendment_docs', []))}"),
             (f"Ngày lập: {self.meta.get('date', datetime.now().strftime('%d/%m/%Y'))}"
              f"  |  Tổng số thay đổi: {len(self.rows)}"),
         ]
